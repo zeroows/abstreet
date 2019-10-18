@@ -63,7 +63,7 @@ impl DrawMap {
             timer.next();
             let draw_r = DrawRoad::new(r, map, cs, ctx.prerender);
             all_roads.push(
-                osm_rank_to_color(cs, r.get_rank()),
+                unzoomed_osm_rank_to_color(cs, r.get_rank()),
                 r.get_thick_polygon().get(timer),
             );
             all_roads.push(
@@ -120,7 +120,10 @@ impl DrawMap {
             timer.next();
             let draw_i = DrawIntersection::new(i, map, cs, ctx.prerender, timer);
             if i.is_stop_sign() {
-                all_intersections.push(osm_rank_to_color(cs, i.get_rank(map)), i.polygon.clone());
+                all_intersections.push(
+                    unzoomed_osm_rank_to_color(cs, i.get_rank(map)),
+                    i.polygon.clone(),
+                );
                 all_intersections.push(cs.get("unzoomed outline"), draw_i.get_outline(map));
             } else {
                 all_intersections.push(
@@ -412,7 +415,7 @@ impl AgentCache {
     }
 }
 
-fn osm_rank_to_color(cs: &ColorScheme, rank: usize) -> Color {
+fn unzoomed_osm_rank_to_color(cs: &ColorScheme, rank: usize) -> Color {
     if rank >= 16 {
         cs.get_def("unzoomed highway road", Color::rgb(232, 146, 162))
     } else if rank >= 6 {

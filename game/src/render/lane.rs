@@ -1,5 +1,7 @@
 use crate::helpers::{ColorScheme, ID};
-use crate::render::{dashed_lines, DrawCtx, DrawOptions, Renderable, OUTLINE_THICKNESS};
+use crate::render::{
+    dashed_lines, osm_rank_to_color, DrawCtx, DrawOptions, Renderable, OUTLINE_THICKNESS,
+};
 use abstutil::Timer;
 use ezgui::{Color, Drawable, GeomBatch, GfxCtx, Prerender};
 use geom::{Circle, Distance, Line, PolyLine, Polygon, Pt2D};
@@ -47,11 +49,11 @@ impl DrawLane {
         let mut draw = GeomBatch::new();
         draw.push(
             match lane.lane_type {
-                LaneType::Driving => cs.get_def("driving lane", Color::BLACK),
+                LaneType::Driving | LaneType::Parking | LaneType::Biking => {
+                    osm_rank_to_color(cs, map.get_parent(lane.id).get_rank())
+                }
                 LaneType::Bus => cs.get_def("bus lane", Color::rgb(190, 74, 76)),
-                LaneType::Parking => cs.get_def("parking lane", Color::grey(0.2)),
                 LaneType::Sidewalk => cs.get_def("sidewalk", Color::grey(0.8)),
-                LaneType::Biking => cs.get_def("bike lane", Color::rgb(15, 125, 75)),
             },
             polygon.clone(),
         );
@@ -79,7 +81,12 @@ impl DrawLane {
                         calculate_turn_markings(map, lane, timer),
                     );
                 }
-                LaneType::Biking => {}
+                LaneType::Biking => {
+                    draw.extend(
+                        cs.get_def("bike lane boundary", Color::rgb(15, 125, 75)),
+                        calculate_bike_lane_boundaries(lane, timer),
+                    );
+                }
             };
         }
 
@@ -254,4 +261,18 @@ fn calculate_turn_markings(map: &Map, lane: &Lane, timer: &mut Timer) -> Vec<Pol
         return Vec::new();
     }
     results
+}
+
+fn calculate_bike_lane_boundaries(lane: &Lane, timer: &mut Timer) -> Vec<Polygon> {
+    let width = Distance::meters(0.5);
+    vec![
+        lane.lane_center_pts
+            .shift_right((LANE_THICKNESS - width) / 2.0)
+            .with_context(timer, format!("bike boundaries for {}", lane.id))
+            .make_polygons(width),
+        lane.lane_center_pts
+            .shift_left((LANE_THICKNESS - width) / 2.0)
+            .with_context(timer, format!("bike boundaries for {}", lane.id))
+            .make_polygons(width),
+    ]
 }

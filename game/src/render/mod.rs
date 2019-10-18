@@ -87,6 +87,18 @@ pub fn dashed_lines(pl: &PolyLine, dash_len: Distance, dash_separation: Distance
         .dashed_polygons(width, dash_len, dash_separation)
 }
 
+pub fn osm_rank_to_color(cs: &ColorScheme, rank: usize) -> Color {
+    // really faded: Color::rgb(121, 125, 128)
+
+    if rank >= 16 {
+        cs.get_def("zoomed highway road", Color::grey(0.6))
+    } else if rank >= 6 {
+        cs.get_def("zoomed arterial road", Color::grey(0.26))
+    } else {
+        cs.get_def("zoomed residential road", Color::BLACK)
+    }
+}
+
 pub struct DrawCtx<'a> {
     pub cs: &'a ColorScheme,
     pub map: &'a Map,

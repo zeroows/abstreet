@@ -27,6 +27,7 @@ impl DrawRoad {
             .shift_left(LANE_THICKNESS / 2.0)
             .unwrap();
         draw.extend(
+            // Color::rgb(202, 177, 39)
             cs.get_def("road center line", Color::YELLOW),
             dashed_lines(&center, Distance::meters(2.0), Distance::meters(1.0)),
         );
