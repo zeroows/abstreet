@@ -1,7 +1,7 @@
 use crate::helpers::{ColorScheme, ID};
 use crate::render::{
-    draw_signal_phase, DrawCtx, DrawOptions, Renderable, CROSSWALK_LINE_THICKNESS,
-    OUTLINE_THICKNESS,
+    draw_signal_phase, osm_rank_to_color, DrawCtx, DrawOptions, Renderable,
+    CROSSWALK_LINE_THICKNESS, OUTLINE_THICKNESS,
 };
 use abstutil::Timer;
 use ezgui::{Color, Drawable, GeomBatch, GfxCtx, Prerender};
@@ -37,7 +37,7 @@ impl DrawIntersection {
             if i.is_border() {
                 cs.get_def("border intersection", Color::rgb(50, 205, 50))
             } else {
-                cs.get_def("normal intersection", Color::grey(0.2))
+                osm_rank_to_color(cs, i.get_rank(map))
             },
             i.polygon.clone(),
         );
@@ -327,7 +327,7 @@ fn make_crosswalk(batch: &mut GeomBatch, turn: &Turn, cs: &ColorScheme) {
             // Reuse perp_line. Project away an arbitrary amount
             let pt2 = pt1.project_away(Distance::meters(1.0), turn.angle());
             batch.push(
-                cs.get_def("crosswalk", Color::WHITE),
+                cs.get_def("crosswalk", Color::BLACK),
                 perp_line(Line::new(pt1, pt2), LANE_THICKNESS)
                     .make_polygons(CROSSWALK_LINE_THICKNESS),
             );

@@ -8,7 +8,7 @@ use crate::render::intersection::DrawIntersection;
 use crate::render::lane::DrawLane;
 use crate::render::road::DrawRoad;
 use crate::render::turn::DrawTurn;
-use crate::render::Renderable;
+use crate::render::{osm_rank_to_color, Renderable};
 use crate::ui::Flags;
 use aabb_quadtree::QuadTree;
 use abstutil::{Cloneable, Timer};
@@ -413,16 +413,6 @@ impl AgentCache {
             self.agents_per_on.clear();
             self.time = Some(now);
         }
-    }
-}
-
-fn osm_rank_to_color(cs: &ColorScheme, rank: usize) -> Color {
-    if rank >= 16 {
-        cs.get_def("unzoomed highway road", Color::rgb(232, 146, 162))
-    } else if rank >= 6 {
-        cs.get_def("unzoomed arterial road", Color::rgb(255, 199, 62))
-    } else {
-        cs.get_def("unzoomed residential road", Color::WHITE)
     }
 }
 

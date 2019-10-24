@@ -1,5 +1,7 @@
 use crate::helpers::{ColorScheme, ID};
-use crate::render::{dashed_lines, DrawCtx, DrawOptions, Renderable, OUTLINE_THICKNESS};
+use crate::render::{
+    dashed_lines, osm_rank_to_color, DrawCtx, DrawOptions, Renderable, OUTLINE_THICKNESS,
+};
 use abstutil::Timer;
 use ezgui::{Color, Drawable, GeomBatch, GfxCtx, Prerender};
 use geom::{Circle, Distance, Line, PolyLine, Polygon, Pt2D};
@@ -47,9 +49,10 @@ impl DrawLane {
         let mut draw = GeomBatch::new();
         draw.push(
             match lane.lane_type {
-                LaneType::Driving => cs.get_def("driving lane", Color::BLACK),
+                LaneType::Driving | LaneType::Parking => {
+                    osm_rank_to_color(cs, map.get_parent(lane.id).get_rank())
+                }
                 LaneType::Bus => cs.get_def("bus lane", Color::rgb(190, 74, 76)),
-                LaneType::Parking => cs.get_def("parking lane", Color::grey(0.2)),
                 LaneType::Sidewalk => cs.get_def("sidewalk", Color::grey(0.8)),
                 LaneType::Biking => cs.get_def("bike lane", Color::rgb(15, 125, 75)),
                 LaneType::SharedLeftTurn => cs.get("driving lane"),
@@ -66,17 +69,17 @@ impl DrawLane {
                 }
                 LaneType::Parking => {
                     draw.extend(
-                        cs.get_def("parking lines", Color::WHITE),
+                        cs.get_def("parking lines", Color::BLACK),
                         calculate_parking_lines(lane),
                     );
                 }
                 LaneType::Driving | LaneType::Bus => {
                     draw.extend(
-                        cs.get_def("dashed lane line", Color::WHITE),
+                        cs.get_def("dashed lane line", Color::BLACK),
                         calculate_driving_lines(lane, road, timer),
                     );
                     draw.extend(
-                        cs.get_def("turn restrictions on lane", Color::WHITE),
+                        cs.get_def("turn restrictions on lane", Color::BLACK),
                         calculate_turn_markings(map, lane, timer),
                     );
                 }

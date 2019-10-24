@@ -38,7 +38,7 @@ impl DrawRoad {
             || r.children_forwards[0].1 != LaneType::SharedLeftTurn
         {
             draw.extend(
-                cs.get_def("road center line", Color::YELLOW),
+                cs.get_def("road center line", Color::rgb(202, 177, 39)),
                 dashed_lines(&center, width, Distance::meters(2.0), Distance::meters(1.0)),
             );
         }

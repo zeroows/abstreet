@@ -100,6 +100,16 @@ pub fn dashed_lines(
         .dashed_polygons(width, dash_len, dash_separation)
 }
 
+pub fn osm_rank_to_color(cs: &ColorScheme, rank: usize) -> Color {
+    if rank >= 16 {
+        cs.get_def("unzoomed highway road", Color::rgb(232, 146, 162))
+    } else if rank >= 6 {
+        cs.get_def("unzoomed arterial road", Color::rgb(255, 199, 62))
+    } else {
+        cs.get_def("unzoomed residential road", Color::WHITE)
+    }
+}
+
 pub struct DrawCtx<'a> {
     pub cs: &'a ColorScheme,
     pub map: &'a Map,
