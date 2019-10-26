@@ -34,6 +34,10 @@ impl Distance {
         Distance::meters(0.0254 * value)
     }
 
+    pub fn feet(value: f64) -> Distance {
+        Distance::meters(0.3048 * value)
+    }
+
     pub fn miles(value: f64) -> Distance {
         Distance::meters(1609.34 * value)
     }

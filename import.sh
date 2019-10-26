@@ -84,6 +84,17 @@ if [ ! -f data/shapes/sidewalks.bin ]; then
 	cd ..
 fi
 
+if [ ! -f data/shapes/streets.bin ]; then
+	# From https://data-seattlecitygis.opendata.arcgis.com/datasets/seattle-streets
+	get_if_needed https://opendata.arcgis.com/datasets/383027d103f042499693da22d72d10e3_0.kml data/input/streets.kml;
+
+	cd kml
+	time cargo run --release -- \
+		--input=../data/input/streets.kml \
+		--output=../data/shapes/streets.bin
+	cd ..
+fi
+
 if [ ! -f data/input/household_vehicles.kml ]; then
 	# From https://gis-kingcounty.opendata.arcgis.com/datasets/acs-household-size-by-vehicles-available-acs-b08201-householdvehicles
 	get_if_needed https://opendata.arcgis.com/datasets/7842d815523c4f1b9564e0301e2eafa4_2372.kml data/input/household_vehicles.kml;
@@ -119,6 +130,7 @@ for poly in `ls ../data/polygons/`; do
 		--osm=../data/input/$name.osm \
 		--parking_shapes=../data/shapes/blockface.bin \
 		--offstreet_parking=../data/input/offstreet_parking.kml \
+		--streets=../data/shapes/streets.bin \
 		--gtfs=../data/input/google_transit_2018_18_08 \
 		--neighborhoods=../data/input/neighborhoods.geojson \
 		--clip=../data/polygons/$name.poly \

@@ -15,6 +15,7 @@ pub struct Flags {
     pub parking_shapes: Option<String>,
     pub offstreet_parking: Option<String>,
     pub sidewalks: Option<String>,
+    pub streets: Option<String>,
     pub gtfs: Option<String>,
     pub neighborhoods: Option<String>,
     pub clip: Option<String>,
@@ -41,6 +42,9 @@ pub fn convert(flags: &Flags, timer: &mut abstutil::Timer) -> RawMap {
     }
     if let Some(ref path) = flags.sidewalks {
         use_sidewalk_hints(&mut map, path, timer);
+    }
+    if let Some(ref path) = flags.streets {
+        use_street_hints(&mut map, path, timer);
     }
     if let Some(ref path) = flags.gtfs {
         timer.start("load GTFS");
@@ -293,4 +297,35 @@ fn use_sidewalk_hints(map: &mut RawMap, path: &str, timer: &mut Timer) {
         }
     }
     timer.stop("apply sidewalk hints");
+}
+
+fn use_street_hints(map: &mut RawMap, path: &str, timer: &mut Timer) {
+    timer.start("apply street hints");
+    let shapes: ExtraShapes = abstutil::read_binary(path, timer).unwrap();
+
+    // Match shapes with the nearest road
+    let mut closest: FindClosest<StableRoadID> = FindClosest::new(&map.gps_bounds.to_bounds());
+    for (id, r) in &map.roads {
+        closest.add(*id, &r.center_points);
+    }
+
+    for s in shapes.shapes.into_iter() {
+        let pts = map.gps_bounds.forcibly_convert(&s.points);
+        if pts.len() <= 1 {
+            continue;
+        }
+        // TODO closest_pt really doesn't make sense at all.
+        if let Some(middle) = PolyLine::maybe_new(pts).map(|pl| pl.middle()) {
+            if let Some((r, _)) = closest.closest_pt(middle, LANE_THICKNESS * 5.0) {
+                if let Some(width) = s.attributes.get("SURFACEWIDTH") {
+                    map.roads
+                        .get_mut(&r)
+                        .unwrap()
+                        .osm_tags
+                        .insert("abst:width_ft".to_string(), width.to_string());
+                }
+            }
+        }
+    }
+    timer.stop("apply street hints");
 }

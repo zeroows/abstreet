@@ -8,6 +8,7 @@ fn main() {
         parking_shapes: args.optional("--parking_shapes"),
         offstreet_parking: args.optional("--offstreet_parking"),
         sidewalks: args.optional("--sidewalks"),
+        streets: args.optional("--streets"),
         gtfs: args.optional("--gtfs"),
         neighborhoods: args.optional("--neighborhoods"),
         clip: args.optional("--clip"),

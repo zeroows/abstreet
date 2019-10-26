@@ -7,7 +7,7 @@ use ezgui::{
     hotkey, Choice, Color, Drawable, EventCtx, EventLoopMode, GeomBatch, GfxCtx, Key, Line,
     ModalMenu, Text, Wizard, GUI,
 };
-use geom::{Distance, Line, Polygon, Pt2D};
+use geom::{Distance, Line, PolyLine, Polygon, Pt2D};
 use map_model::raw::{RestrictionType, StableBuildingID, StableIntersectionID, StableRoadID};
 use map_model::{osm, LANE_THICKNESS};
 use model::{Model, ID};
@@ -43,6 +43,7 @@ enum State {
     PreviewIntersection(Drawable, Vec<(Text, Pt2D)>, bool),
     EnteringWarp(Wizard),
     StampingRoads(String, String, String, String),
+    RoadThickness(Drawable),
 }
 
 impl UI {
@@ -79,6 +80,7 @@ impl UI {
                     (hotkey(Key::J), "warp to something"),
                     (None, "produce OSM parking+sidewalk diff"),
                     (hotkey(Key::G), "preview all intersections"),
+                    (hotkey(Key::T), "show road thickness from SDOT"),
                     (None, "find overlapping intersections"),
                 ]],
                 ctx,
@@ -289,6 +291,9 @@ impl GUI for UI {
                         } else if self.menu.action("find overlapping intersections") {
                             let (draw, labels) = find_overlapping_intersections(&self.model, ctx);
                             self.state = State::PreviewIntersection(draw, labels, false);
+                        } else if self.menu.action("show road thickness from SDOT") {
+                            self.state =
+                                State::RoadThickness(show_road_thickness(&self.model, ctx));
                         }
                     }
                 }
@@ -509,6 +514,12 @@ impl GUI for UI {
                     self.model.world.handle_mouseover(ctx);
                 }
             }
+            State::RoadThickness(_) => {
+                if ctx.input.key_pressed(Key::T, "stop showing road thickness") {
+                    self.state = State::Viewing;
+                    self.model.world.handle_mouseover(ctx);
+                }
+            }
             State::EnteringWarp(ref mut wizard) => {
                 if let Some(line) = wizard.wrap(ctx).input_string("Warp to what?") {
                     let mut ok = false;
@@ -592,6 +603,10 @@ impl GUI for UI {
                 ID::Intersection(_) => false,
                 _ => true,
             }),
+            State::RoadThickness(_) => self.model.world.draw(g, |id| match id {
+                ID::Road(_) => true,
+                _ => false,
+            }),
             _ => self.model.world.draw(g, |_| true),
         }
 
@@ -651,6 +666,9 @@ impl GUI for UI {
                         g.draw_mouse_tooltip(&Text::from(Line(cursor.to_string())));
                     }
                 }
+            }
+            State::RoadThickness(ref draw) => {
+                g.redraw(draw);
             }
         };
 
@@ -734,6 +752,25 @@ fn find_overlapping_intersections(model: &Model, ctx: &EventCtx) -> (Drawable, V
     let mut batch = GeomBatch::new();
     batch.extend(Color::RED.alpha(0.5), overlap);
     (ctx.prerender.upload(batch), Vec::new())
+}
+
+fn show_road_thickness(model: &Model, ctx: &EventCtx) -> Drawable {
+    let mut batch = GeomBatch::new();
+    for (id, r) in &model.map.roads {
+        if let Some(w) = r
+            .osm_tags
+            .get("abst:width_ft")
+            .and_then(|x| x.parse::<usize>().ok())
+        {
+            batch.push(
+                Color::BLACK.alpha(0.8),
+                PolyLine::new(r.center_points.clone()).make_polygons(Distance::feet(w as f64)),
+            );
+        } else {
+            println!("Can't interpret width from {}", id);
+        }
+    }
+    ctx.prerender.upload(batch)
 }
 
 fn main() {
