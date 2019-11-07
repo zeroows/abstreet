@@ -4,7 +4,7 @@ use crate::helpers::ID;
 use crate::ui::UI;
 use ezgui::{EventCtx, GfxCtx, Key, Line, Text, WarpingItemSlider};
 use geom::Pt2D;
-use sim::{TripEnd, TripStart};
+use sim::{TripEndpoint, TripStart};
 
 // TODO More info, like each leg of the trip, times, separate driving leg for looking for
 // parking...
@@ -57,24 +57,19 @@ impl TripExplorer {
                 Text::from(Line("currently here")),
             ),
             match status.end {
-                TripEnd::Bldg(b) => (
+                Some(TripEndpoint::Building(b)) => (
                     map.get_b(b).front_path.line.pt1(),
                     ID::Building(b),
                     Text::from(Line(format!("end at {}", map.get_b(b).get_name()))),
                 ),
-                TripEnd::Border(i) => (
-                    map.get_i(i).polygon.center(),
-                    ID::Intersection(i),
-                    Text::from(Line(format!("leave map via {}", i))),
+                Some(TripEndpoint::Lane(l)) => (
+                    map.get_l(l).lane_center_pts.last_pt(),
+                    ID::Lane(l),
+                    Text::from(Line(format!("vanish at the end of {}", l))),
                 ),
-                TripEnd::ServeBusRoute(br) => {
-                    let route = map.get_br(br);
-                    let stop = map.get_bs(route.stops[0]);
-                    (
-                        stop.driving_pos.pt(map),
-                        ID::BusStop(stop.id),
-                        Text::from(Line(format!("serve route {} forever", route.name))),
-                    )
+                None => {
+                    println!("This car serves a bus route, it never ends");
+                    return None;
                 }
             },
         ];

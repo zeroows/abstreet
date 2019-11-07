@@ -1,11 +1,13 @@
 use crate::{
-    AgentID, CarID, Command, CreateCar, CreatePedestrian, DrivingGoal, Event, ParkingSimState,
-    ParkingSpot, PedestrianID, Scheduler, SidewalkPOI, SidewalkSpot, TransitSimState, TripID,
+    AgentID, CarID, Command, CreateCar, CreatePedestrian, Event, ParkingSimState, ParkingSpot,
+    PedestrianID, Scheduler, SidewalkPOI, SidewalkSpot, TransitSimState, TripEndpoint, TripID,
     Vehicle, WalkingSimState,
 };
 use abstutil::{deserialize_btreemap, serialize_btreemap};
 use geom::{Duration, Speed};
-use map_model::{BuildingID, BusRouteID, BusStopID, IntersectionID, Map, PathRequest, Position};
+use map_model::{
+    BuildingID, BusRouteID, BusStopID, IntersectionID, LaneID, Map, PathRequest, Position,
+};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 
@@ -62,21 +64,16 @@ impl TripManager {
                 }
             }
         }
+
         let end = match legs.last() {
             Some(TripLeg::Walk(_, _, ref spot)) => match spot.connection {
-                SidewalkPOI::Building(b) => TripEnd::Bldg(b),
-                SidewalkPOI::Border(i) => TripEnd::Border(i),
-                SidewalkPOI::DeferredParkingSpot(_, ref goal) => match goal {
-                    DrivingGoal::ParkNear(b) => TripEnd::Bldg(*b),
-                    DrivingGoal::Border(i, _) => TripEnd::Border(*i),
-                },
+                SidewalkPOI::Building(b) => Some(TripEndpoint::Building(b)),
+                SidewalkPOI::Border(_) => Some(TripEndpoint::Lane(spot.sidewalk_pos.lane())),
+                SidewalkPOI::DeferredParkingSpot(_, ref goal) => Some(goal.clone()),
                 _ => unreachable!(),
             },
-            Some(TripLeg::Drive(_, ref goal)) => match goal {
-                DrivingGoal::ParkNear(b) => TripEnd::Bldg(*b),
-                DrivingGoal::Border(i, _) => TripEnd::Border(*i),
-            },
-            Some(TripLeg::ServeBusRoute(_, route)) => TripEnd::ServeBusRoute(*route),
+            Some(TripLeg::Drive(_, ref goal)) => Some(goal.clone()),
+            Some(TripLeg::ServeBusRoute(_, _)) => None,
             _ => unreachable!(),
         };
         let trip = Trip {
@@ -126,7 +123,7 @@ impl TripManager {
         let trip = &mut self.trips[self.active_trip_mode.remove(&AgentID::Car(car)).unwrap().0];
 
         match trip.legs.pop_front() {
-            Some(TripLeg::Drive(vehicle, DrivingGoal::ParkNear(_))) => assert_eq!(car, vehicle.id),
+            Some(TripLeg::Drive(vehicle, TripEndpoint::Building(_))) => assert_eq!(car, vehicle.id),
             _ => unreachable!(),
         };
 
@@ -189,7 +186,7 @@ impl TripManager {
             // Actually, to unpark, the car's front should be where it'll wind up at the end.
             start = Position::new(start.lane(), start.dist_along() + parked_car.vehicle.length);
         }
-        let end = drive_to.goal_pos(map);
+        let end = drive_to.goal_pos_for_vehicle(map);
         let path = if let Some(p) = map.pathfind(PathRequest {
             start,
             end,
@@ -208,7 +205,7 @@ impl TripManager {
             return;
         };
 
-        let router = drive_to.make_router(path, map, parked_car.vehicle.vehicle_type);
+        let router = drive_to.make_router_for_vehicle(path, map, parked_car.vehicle.vehicle_type);
         scheduler.push(
             now,
             Command::SpawnCar(
@@ -242,7 +239,7 @@ impl TripManager {
             _ => unreachable!(),
         };
 
-        let end = drive_to.goal_pos(map);
+        let end = drive_to.goal_pos_for_vehicle(map);
         let path = if let Some(p) = map.pathfind(PathRequest {
             start: driving_pos,
             end,
@@ -261,7 +258,7 @@ impl TripManager {
             return;
         };
 
-        let router = drive_to.make_router(path, map, vehicle.vehicle_type);
+        let router = drive_to.make_router_for_vehicle(path, map, vehicle.vehicle_type);
         scheduler.push(
             now,
             Command::SpawnCar(
@@ -286,7 +283,9 @@ impl TripManager {
         let trip = &mut self.trips[self.active_trip_mode.remove(&AgentID::Car(bike)).unwrap().0];
 
         match trip.legs.pop_front() {
-            Some(TripLeg::Drive(vehicle, DrivingGoal::ParkNear(_))) => assert_eq!(vehicle.id, bike),
+            Some(TripLeg::Drive(vehicle, TripEndpoint::Building(_))) => {
+                assert_eq!(vehicle.id, bike)
+            }
             _ => unreachable!(),
         };
 
@@ -404,11 +403,11 @@ impl TripManager {
         ));
     }
 
-    pub fn car_or_bike_reached_border(&mut self, now: Duration, car: CarID, i: IntersectionID) {
-        self.events.push(Event::CarOrBikeReachedBorder(car, i));
+    pub fn car_or_bike_vanished_at(&mut self, now: Duration, car: CarID, l: LaneID) {
+        self.events.push(Event::CarOrBikeVanished(car, l));
         let trip = &mut self.trips[self.active_trip_mode.remove(&AgentID::Car(car)).unwrap().0];
         match trip.legs.pop_front().unwrap() {
-            TripLeg::Drive(_, DrivingGoal::Border(int, _)) => assert_eq!(i, int),
+            TripLeg::Drive(_, TripEndpoint::Lane(lane)) => assert_eq!(l, lane),
             _ => unreachable!(),
         };
         assert!(trip.legs.is_empty());
@@ -531,16 +530,22 @@ impl TripManager {
 
     // TODO Refactor after wrangling the TripStart/TripEnd mess
     pub fn count_trips_involving_bldg(&self, b: BuildingID, now: Duration) -> Option<Vec<String>> {
-        self.count_trips(TripStart::Bldg(b), TripEnd::Bldg(b), now)
+        self.count_trips(TripStart::Bldg(b), TripEndpoint::Building(b), now)
     }
     pub fn count_trips_involving_border(
         &self,
         i: IntersectionID,
         now: Duration,
     ) -> Option<Vec<String>> {
-        self.count_trips(TripStart::Border(i), TripEnd::Border(i), now)
+        // TODO temporarily breaking this during refactor
+        self.count_trips(TripStart::Border(i), TripEndpoint::Lane(LaneID(0)), now)
     }
-    fn count_trips(&self, start: TripStart, end: TripEnd, now: Duration) -> Option<Vec<String>> {
+    fn count_trips(
+        &self,
+        start: TripStart,
+        end: TripEndpoint,
+        now: Duration,
+    ) -> Option<Vec<String>> {
         let mut from_aborted = 0;
         let mut from_in_progress = 0;
         let mut from_completed = 0;
@@ -563,7 +568,7 @@ impl TripManager {
                 } else {
                     from_unstarted += 1;
                 }
-            } else if trip.end == end {
+            } else if trip.end.as_ref() == Some(&end) {
                 any = true;
                 if trip.aborted {
                     to_aborted += 1;
@@ -610,7 +615,8 @@ struct Trip {
     legs: VecDeque<TripLeg>,
     mode: TripMode,
     start: TripStart,
-    end: TripEnd,
+    // Bus trips never end.
+    end: Option<TripEndpoint>,
 }
 
 impl Trip {
@@ -693,7 +699,7 @@ impl Trip {
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum TripLeg {
     Walk(PedestrianID, Speed, SidewalkSpot),
-    Drive(Vehicle, DrivingGoal),
+    Drive(Vehicle, TripEndpoint),
     RideBus(PedestrianID, BusRouteID, BusStopID),
     ServeBusRoute(CarID, BusRouteID),
 }
@@ -745,17 +751,9 @@ pub enum TripStart {
     Appearing(Position),
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum TripEnd {
-    Bldg(BuildingID),
-    Border(IntersectionID),
-    // No end!
-    ServeBusRoute(BusRouteID),
-}
-
 pub struct TripStatus {
     pub start: TripStart,
-    pub end: TripEnd,
+    pub end: Option<TripEndpoint>,
 }
 
 pub enum TripResult<T> {

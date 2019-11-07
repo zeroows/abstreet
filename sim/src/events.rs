@@ -6,7 +6,7 @@ use serde_derive::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Event {
     CarReachedParkingSpot(CarID, ParkingSpot),
-    CarOrBikeReachedBorder(CarID, IntersectionID),
+    CarOrBikeVanished(CarID, LaneID),
 
     BusArrivedAtStop(CarID, BusRouteID, BusStopID),
     BusDepartedFromStop(CarID, BusRouteID, BusStopID),

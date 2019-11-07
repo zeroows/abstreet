@@ -1,10 +1,7 @@
 use crate::mechanics::Queue;
 use crate::{ParkingSimState, ParkingSpot, SidewalkSpot, Vehicle, VehicleType};
 use geom::Distance;
-use map_model::{
-    BuildingID, IntersectionID, LaneID, LaneType, Map, Path, PathStep, Position, Traversable,
-    TurnID,
-};
+use map_model::{BuildingID, LaneID, LaneType, Map, Path, PathStep, Position, Traversable, TurnID};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
@@ -17,7 +14,7 @@ pub struct Router {
 
 #[derive(Debug)]
 pub enum ActionAtEnd {
-    VanishAtBorder(IntersectionID),
+    Vanish,
     StartParking(ParkingSpot),
     GotoLaneEnd,
     StopBiking(SidewalkSpot),
@@ -35,9 +32,8 @@ enum Goal {
         // No parking available at all!
         stuck_end_dist: Option<Distance>,
     },
-    EndAtBorder {
+    Vanish {
         end_dist: Distance,
-        i: IntersectionID,
     },
     BikeThenStop {
         end_dist: Distance,
@@ -48,10 +44,10 @@ enum Goal {
 }
 
 impl Router {
-    pub fn end_at_border(path: Path, end_dist: Distance, i: IntersectionID) -> Router {
+    pub fn end_suddenly(path: Path, end_dist: Distance) -> Router {
         Router {
             path,
-            goal: Goal::EndAtBorder { end_dist, i },
+            goal: Goal::Vanish { end_dist },
         }
     }
 
@@ -104,7 +100,7 @@ impl Router {
         // Shouldn't ask earlier!
         assert!(self.last_step());
         match self.goal {
-            Goal::EndAtBorder { end_dist, .. } => end_dist,
+            Goal::Vanish { end_dist } => end_dist,
             Goal::ParkNearBuilding {
                 spot,
                 stuck_end_dist,
@@ -162,9 +158,9 @@ impl Router {
         map: &Map,
     ) -> Option<ActionAtEnd> {
         match self.goal {
-            Goal::EndAtBorder { end_dist, i } => {
+            Goal::Vanish { end_dist } => {
                 if end_dist == front {
-                    Some(ActionAtEnd::VanishAtBorder(i))
+                    Some(ActionAtEnd::Vanish)
                 } else {
                     None
                 }

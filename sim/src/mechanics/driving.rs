@@ -423,8 +423,12 @@ impl DrivingSimState {
                     .router
                     .maybe_handle_end(our_dist, &car.vehicle, parking, map)
                 {
-                    Some(ActionAtEnd::VanishAtBorder(i)) => {
-                        trips.car_or_bike_reached_border(now, car.vehicle.id, i);
+                    Some(ActionAtEnd::Vanish) => {
+                        trips.car_or_bike_vanished_at(
+                            now,
+                            car.vehicle.id,
+                            car.router.head().as_lane(),
+                        );
                     }
                     Some(ActionAtEnd::AbortTrip) => {
                         trips.abort_trip_impossible_parking(car.vehicle.id);

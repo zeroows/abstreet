@@ -3,7 +3,7 @@ use crate::PopDat;
 use abstutil::Timer;
 use geom::{Distance, Duration, LonLat, Polygon, Pt2D};
 use map_model::{BuildingID, IntersectionID, LaneType, Map, PathRequest, Position};
-use sim::{DrivingGoal, Scenario, SidewalkSpot, SpawnTrip, TripSpec};
+use sim::{Scenario, SidewalkSpot, SpawnTrip, TripEndpoint, TripSpec};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ impl Trip {
                 end: self
                     .to
                     .driving_goal(vec![LaneType::Biking, LaneType::Driving], map)
-                    .goal_pos(map),
+                    .goal_pos_for_vehicle(map),
                 can_use_bike_lanes: true,
                 can_use_bus_lanes: false,
             },
@@ -53,7 +53,7 @@ impl Trip {
                 end: self
                     .to
                     .driving_goal(vec![LaneType::Driving], map)
-                    .goal_pos(map),
+                    .goal_pos_for_vehicle(map),
                 can_use_bike_lanes: false,
                 can_use_bus_lanes: false,
             },
@@ -129,10 +129,12 @@ impl TripEndpt {
         }
     }
 
-    fn driving_goal(&self, lane_types: Vec<LaneType>, map: &Map) -> DrivingGoal {
+    fn driving_goal(&self, lane_types: Vec<LaneType>, map: &Map) -> TripEndpoint {
         match self {
-            TripEndpt::Building(b) => DrivingGoal::ParkNear(*b),
-            TripEndpt::Border(i, _) => DrivingGoal::end_at_border(*i, lane_types, map).unwrap(),
+            TripEndpt::Building(b) => TripEndpoint::Building(*b),
+            TripEndpt::Border(i, _) => {
+                TripEndpoint::end_at_intersection(*i, lane_types, map).unwrap()
+            }
         }
     }
 

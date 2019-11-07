@@ -1,10 +1,10 @@
 use crate::{
     AgentID, AgentMetadata, Analytics, CarID, Command, CreateCar, DrawCarInput, DrawPedCrowdInput,
-    DrawPedestrianInput, DrivingGoal, DrivingSimState, Event, FinishedTrips, GetDrawAgents,
+    DrawPedestrianInput, DrivingSimState, Event, FinishedTrips, GetDrawAgents,
     IntersectionSimState, ParkedCar, ParkingSimState, ParkingSpot, PedestrianID, Router, Scheduler,
-    SidewalkPOI, SidewalkSpot, TransitSimState, TripID, TripLeg, TripManager, TripPositions,
-    TripResult, TripSpawner, TripSpec, TripStart, TripStatus, UnzoomedAgent, VehicleSpec,
-    VehicleType, WalkingSimState, BUS_LENGTH,
+    SidewalkPOI, SidewalkSpot, TransitSimState, TripEndpoint, TripID, TripLeg, TripManager,
+    TripPositions, TripResult, TripSpawner, TripSpec, TripStart, TripStatus, UnzoomedAgent,
+    VehicleSpec, VehicleType, WalkingSimState, BUS_LENGTH,
 };
 use abstutil::{elapsed_seconds, Timer};
 use derivative::Derivative;
@@ -126,7 +126,7 @@ impl Sim {
                 let car = CarID(self.car_id_counter, vehicle_spec.vehicle_type);
                 self.car_id_counter += 1;
                 let ped = match goal {
-                    DrivingGoal::ParkNear(_) => {
+                    TripEndpoint::Building(_) => {
                         let id = PedestrianID(self.ped_id_counter);
                         self.ped_id_counter += 1;
                         Some(id)
@@ -427,14 +427,14 @@ impl Sim {
                                     ),
                                 ];
                                 match driving_goal {
-                                    DrivingGoal::ParkNear(b) => {
+                                    TripEndpoint::Building(b) => {
                                         legs.push(TripLeg::Walk(
                                             create_ped.id,
                                             create_ped.speed,
                                             SidewalkSpot::building(b, map),
                                         ));
                                     }
-                                    DrivingGoal::Border(_, _) => {}
+                                    TripEndpoint::Lane(_) => {}
                                 }
                                 self.trips.dynamically_override_legs(create_ped.trip, legs);
                                 true

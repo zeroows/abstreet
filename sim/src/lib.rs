@@ -23,7 +23,7 @@ pub(crate) use self::scheduler::{Command, Scheduler};
 pub use self::sim::{Sim, SimOptions};
 pub(crate) use self::transit::TransitSimState;
 pub use self::trips::TripResult;
-pub use self::trips::{FinishedTrips, TripEnd, TripMode, TripStart, TripStatus};
+pub use self::trips::{FinishedTrips, TripMode, TripStart, TripStatus};
 pub(crate) use self::trips::{TripLeg, TripManager};
 pub use crate::render::{
     AgentMetadata, CarStatus, DontDrawAgents, DrawCarInput, DrawPedCrowdInput, DrawPedestrianInput,
@@ -171,17 +171,19 @@ pub struct ParkedCar {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DrivingGoal {
-    ParkNear(BuildingID),
-    Border(IntersectionID, LaneID),
+pub enum TripEndpoint {
+    Building(BuildingID),
+    // Might lead from/to to a border intersection, or maybe not if it's just an interactively
+    // spawned trip.
+    Lane(LaneID),
 }
 
-impl DrivingGoal {
-    pub fn end_at_border(
+impl TripEndpoint {
+    pub fn end_at_intersection(
         i: IntersectionID,
         lane_types: Vec<LaneType>,
         map: &Map,
-    ) -> Option<DrivingGoal> {
+    ) -> Option<TripEndpoint> {
         let mut lanes = Vec::new();
         for lt in lane_types {
             lanes.extend(map.get_i(i).get_incoming_lanes(map, lt));
@@ -190,21 +192,22 @@ impl DrivingGoal {
             None
         } else {
             // TODO ideally could use any
-            Some(DrivingGoal::Border(i, lanes[0]))
+            Some(TripEndpoint::Lane(lanes[0]))
         }
     }
 
-    pub fn goal_pos(&self, map: &Map) -> Position {
+    // TODO Should be different for bikes!
+    pub fn goal_pos_for_vehicle(&self, map: &Map) -> Position {
         let lane = match self {
-            DrivingGoal::ParkNear(b) => map.find_driving_lane_near_building(*b),
-            DrivingGoal::Border(_, l) => *l,
+            TripEndpoint::Building(b) => map.find_driving_lane_near_building(*b),
+            TripEndpoint::Lane(l) => *l,
         };
         Position::new(lane, map.get_l(lane).length())
     }
 
-    pub fn make_router(&self, path: Path, map: &Map, vt: VehicleType) -> Router {
+    pub fn make_router_for_vehicle(&self, path: Path, map: &Map, vt: VehicleType) -> Router {
         match self {
-            DrivingGoal::ParkNear(b) => {
+            TripEndpoint::Building(b) => {
                 if vt == VehicleType::Bike {
                     // TODO Stop closer to the building?
                     let end = path.last_step().as_lane();
@@ -213,8 +216,8 @@ impl DrivingGoal {
                     Router::park_near(path, *b)
                 }
             }
-            DrivingGoal::Border(i, last_lane) => {
-                Router::end_at_border(path, map.get_l(*last_lane).length(), *i)
+            TripEndpoint::Lane(last_lane) => {
+                Router::end_suddenly(path, map.get_l(*last_lane).length())
             }
         }
     }
@@ -230,7 +233,7 @@ impl SidewalkSpot {
     // Pretty hacky case
     pub fn deferred_parking_spot(
         start_bldg: BuildingID,
-        goal: DrivingGoal,
+        goal: TripEndpoint,
         map: &Map,
     ) -> SidewalkSpot {
         SidewalkSpot {
@@ -347,7 +350,7 @@ pub enum SidewalkPOI {
     // Note that for offstreet parking, the path will be the same as the building's front path.
     ParkingSpot(ParkingSpot),
     // Don't actually know where this goes yet!
-    DeferredParkingSpot(BuildingID, DrivingGoal),
+    DeferredParkingSpot(BuildingID, TripEndpoint),
     Building(BuildingID),
     BusStop(BusStopID),
     Border(IntersectionID),

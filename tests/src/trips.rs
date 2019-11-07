@@ -2,7 +2,7 @@ use crate::runner::TestRunner;
 use abstutil::Timer;
 use geom::Duration;
 use map_model::{BuildingID, IntersectionID};
-use sim::{DrivingGoal, Event, Scenario, SidewalkSpot, SimFlags, TripSpec};
+use sim::{Event, Scenario, SidewalkSpot, SimFlags, TripEndpoint, TripSpec};
 
 pub fn run(t: &mut TestRunner) {
     t.run_slow("bike_from_border", |h| {
@@ -16,7 +16,7 @@ pub fn run(t: &mut TestRunner) {
             TripSpec::UsingBike {
                 start: SidewalkSpot::start_at_border(IntersectionID(186), &map).unwrap(),
                 vehicle: Scenario::rand_bike(&mut rng),
-                goal: DrivingGoal::ParkNear(goal_bldg),
+                goal: TripEndpoint::Building(goal_bldg),
                 ped_speed: Scenario::rand_ped_speed(&mut rng),
             },
             &map,

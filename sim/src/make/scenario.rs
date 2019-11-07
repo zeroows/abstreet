@@ -1,5 +1,5 @@
 use crate::{
-    CarID, DrivingGoal, ParkingSpot, SidewalkSpot, Sim, TripSpec, VehicleSpec, VehicleType,
+    CarID, ParkingSpot, SidewalkSpot, Sim, TripEndpoint, TripSpec, VehicleSpec, VehicleType,
     BIKE_LENGTH, MAX_CAR_LENGTH, MIN_CAR_LENGTH,
 };
 use abstutil;
@@ -441,7 +441,7 @@ impl SpawnOverTime {
                     .sidewalk_to_bike(start_at)
                     .is_some()
                 {
-                    let ok = if let DrivingGoal::ParkNear(to_bldg) = goal {
+                    let ok = if let TripEndpoint::Building(to_bldg) = goal {
                         let end_at = map.get_b(to_bldg).sidewalk();
                         map.get_parent(end_at).sidewalk_to_bike(end_at).is_some()
                             && start_at != end_at
@@ -698,13 +698,13 @@ impl OriginDestination {
         neighborhoods: &HashMap<String, FullNeighborhoodInfo>,
         rng: &mut XorShiftRng,
         timer: &mut Timer,
-    ) -> Option<DrivingGoal> {
+    ) -> Option<TripEndpoint> {
         match self {
-            OriginDestination::Neighborhood(ref n) => Some(DrivingGoal::ParkNear(
+            OriginDestination::Neighborhood(ref n) => Some(TripEndpoint::Building(
                 *neighborhoods[n].buildings.choose(rng).unwrap(),
             )),
             OriginDestination::Border(i) => {
-                let goal = DrivingGoal::end_at_border(*i, lane_types, map);
+                let goal = TripEndpoint::end_at_intersection(*i, lane_types, map);
                 if goal.is_none() {
                     timer.warn(format!(
                         "Can't spawn a car ending at border {}; no appropriate lanes there",
@@ -905,12 +905,12 @@ pub enum SpawnTrip {
         depart: Duration,
         // TODO Replace start with building|border
         start: Position,
-        goal: DrivingGoal,
+        goal: TripEndpoint,
         // For bikes starting at a border, use CarAppearing. UsingBike implies a walk->bike trip.
         is_bike: bool,
     },
-    MaybeUsingParkedCar(Duration, BuildingID, DrivingGoal),
-    UsingBike(Duration, SidewalkSpot, DrivingGoal),
+    MaybeUsingParkedCar(Duration, BuildingID, TripEndpoint),
+    UsingBike(Duration, SidewalkSpot, TripEndpoint),
     JustWalking(Duration, SidewalkSpot, SidewalkSpot),
     UsingTransit(
         Duration,

@@ -12,8 +12,8 @@ use ezgui::{
 use geom::{Distance, Duration, PolyLine};
 use map_model::{BuildingID, IntersectionID, Map, Neighborhood};
 use sim::{
-    BorderSpawnOverTime, DrivingGoal, OriginDestination, Scenario, SeedParkedCars, SidewalkPOI,
-    SidewalkSpot, SpawnOverTime, SpawnTrip,
+    BorderSpawnOverTime, OriginDestination, Scenario, SeedParkedCars, SidewalkPOI, SidewalkSpot,
+    SpawnOverTime, SpawnTrip, TripEndpoint,
 };
 use std::collections::BTreeSet;
 
@@ -67,11 +67,11 @@ impl ScenarioManager {
                 SpawnTrip::CarAppearing { ref goal, .. }
                 | SpawnTrip::MaybeUsingParkedCar(_, _, ref goal)
                 | SpawnTrip::UsingBike(_, _, ref goal) => match goal {
-                    DrivingGoal::ParkNear(b) => {
+                    TripEndpoint::Building(b) => {
                         trips_to_bldg.insert(*b, idx);
                     }
-                    DrivingGoal::Border(i, _) => {
-                        trips_to_border.insert(*i, idx);
+                    TripEndpoint::Lane(l) => {
+                        trips_to_border.insert(ui.primary.map.get_l(*l).dst_i, idx);
                     }
                 },
                 SpawnTrip::JustWalking(_, _, ref spot)
@@ -488,7 +488,7 @@ fn make_trip_picker(
                     .map(|idx| {
                         let trip = &scenario.individ_trips[*idx];
                         Choice::new(
-                            describe(trip, home),
+                            describe(trip, home, &ui.primary.map),
                             other_endpt(trip, home, &ui.primary.map),
                         )
                     })
@@ -508,17 +508,18 @@ fn make_trip_picker(
     }))
 }
 
-fn describe(trip: &SpawnTrip, home: OD) -> String {
-    let driving_goal = |goal: &DrivingGoal| match goal {
-        DrivingGoal::ParkNear(b) => {
+fn describe(trip: &SpawnTrip, home: OD, map: &Map) -> String {
+    let driving_goal = |goal: &TripEndpoint| match goal {
+        TripEndpoint::Building(b) => {
             if OD::Bldg(*b) == home {
                 "HERE".to_string()
             } else {
                 b.to_string()
             }
         }
-        DrivingGoal::Border(i, _) => {
-            if OD::Border(*i) == home {
+        TripEndpoint::Lane(l) => {
+            let i = map.get_l(*l).dst_i;
+            if OD::Border(i) == home {
                 "HERE".to_string()
             } else {
                 i.to_string()
@@ -589,9 +590,9 @@ fn describe(trip: &SpawnTrip, home: OD) -> String {
 }
 
 fn other_endpt(trip: &SpawnTrip, home: OD, map: &Map) -> ID {
-    let driving_goal = |goal: &DrivingGoal| match goal {
-        DrivingGoal::ParkNear(b) => ID::Building(*b),
-        DrivingGoal::Border(i, _) => ID::Intersection(*i),
+    let driving_goal = |goal: &TripEndpoint| match goal {
+        TripEndpoint::Building(b) => ID::Building(*b),
+        TripEndpoint::Lane(l) => ID::Intersection(map.get_l(*l).dst_i),
     };
     let sidewalk_spot = |spot: &SidewalkSpot| match &spot.connection {
         SidewalkPOI::Building(b) => ID::Building(*b),

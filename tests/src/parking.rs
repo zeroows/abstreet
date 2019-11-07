@@ -1,7 +1,7 @@
 use crate::runner::TestRunner;
 use abstutil::Timer;
 use geom::Duration;
-use sim::{DrivingGoal, Event, ParkingSpot, Scenario, SidewalkSpot, SimFlags, TripSpec};
+use sim::{Event, ParkingSpot, Scenario, SidewalkSpot, SimFlags, TripEndpoint, TripSpec};
 
 // TODO park in a garage, then walk somewhere else
 // TODO park in a garage that's also the trip destination
@@ -29,7 +29,7 @@ pub fn run(t: &mut TestRunner) {
             TripSpec::UsingParkedCar {
                 start: SidewalkSpot::building(south_bldg, &map),
                 spot,
-                goal: DrivingGoal::ParkNear(north_bldg),
+                goal: TripEndpoint::Building(north_bldg),
                 ped_speed: Scenario::rand_ped_speed(&mut rng),
             },
             &map,
@@ -67,7 +67,7 @@ pub fn run(t: &mut TestRunner) {
             TripSpec::UsingParkedCar {
                 start: SidewalkSpot::building(south_bldg, &map),
                 spot,
-                goal: DrivingGoal::ParkNear(north_bldg),
+                goal: TripEndpoint::Building(north_bldg),
                 ped_speed: Scenario::rand_ped_speed(&mut rng),
             },
             &map,

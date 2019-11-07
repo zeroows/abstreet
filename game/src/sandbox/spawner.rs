@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use rand_xorshift::XorShiftRng;
 use sim::{
-    BorderSpawnOverTime, DrivingGoal, OriginDestination, Scenario, SidewalkSpot, Sim, TripSpec,
+    BorderSpawnOverTime, OriginDestination, Scenario, SidewalkSpot, Sim, TripEndpoint, TripSpec,
 };
 
 const SMALL_DT: Duration = Duration::const_seconds(0.1);
@@ -284,7 +284,7 @@ fn spawn_agents_around(i: IntersectionID, ui: &mut UI, ctx: &EventCtx) {
                             Scenario::rand_dist(&mut rng, vehicle_spec.length, lane.length()),
                         ),
                         vehicle_spec,
-                        goal: DrivingGoal::ParkNear(
+                        goal: TripEndpoint::Building(
                             map.all_buildings().choose(&mut rng).unwrap().id,
                         ),
                         ped_speed: Scenario::rand_ped_speed(&mut rng),
@@ -377,9 +377,11 @@ fn schedule_trip(
         _ => {
             // Driving
             let goal = match raw_goal {
-                Goal::Building(to) => DrivingGoal::ParkNear(to),
+                Goal::Building(to) => TripEndpoint::Building(to),
                 Goal::Border(to) => {
-                    if let Some(g) = DrivingGoal::end_at_border(to, vec![LaneType::Driving], map) {
+                    if let Some(g) =
+                        TripEndpoint::end_at_intersection(to, vec![LaneType::Driving], map)
+                    {
                         g
                     } else {
                         return Some(format!("Can't end a car trip at {}; no driving lanes", to));
