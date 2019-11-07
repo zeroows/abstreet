@@ -762,8 +762,12 @@ impl Sim {
     pub fn count_trips_involving_bldg(&self, b: BuildingID) -> Option<Vec<String>> {
         self.trips.count_trips_involving_bldg(b, self.time)
     }
-    pub fn count_trips_involving_border(&self, i: IntersectionID) -> Option<Vec<String>> {
-        self.trips.count_trips_involving_border(i, self.time)
+    pub fn count_trips_involving_border(
+        &self,
+        i: IntersectionID,
+        map: &Map,
+    ) -> Option<Vec<String>> {
+        self.trips.count_trips_involving_border(i, self.time, map)
     }
 
     pub fn debug_ped(&self, id: PedestrianID) {

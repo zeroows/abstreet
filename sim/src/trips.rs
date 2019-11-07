@@ -9,7 +9,7 @@ use map_model::{
     BuildingID, BusRouteID, BusStopID, IntersectionID, LaneID, Map, PathRequest, Position,
 };
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TripManager {
@@ -528,19 +528,20 @@ impl TripManager {
         Some((t.id, t.spawned_at))
     }
 
-    // TODO Refactor after wrangling the TripStart/TripEnd mess
     pub fn count_trips_involving_bldg(&self, b: BuildingID, now: Duration) -> Option<Vec<String>> {
-        self.count_trips(TripEndpoint::Building(b), now)
+        self.count_trips(vec![TripEndpoint::Building(b)].into_iter().collect(), now)
     }
     pub fn count_trips_involving_border(
         &self,
-        _: IntersectionID,
+        i: IntersectionID,
         now: Duration,
+        map: &Map,
     ) -> Option<Vec<String>> {
-        // TODO temporarily breaking this during refactor
-        self.count_trips(TripEndpoint::Lane(LaneID(0)), now)
+        let mut endpts = TripEndpoint::all_starting_from_i(i, map);
+        endpts.extend(TripEndpoint::all_ending_at_i(i, map));
+        self.count_trips(endpts, now)
     }
-    fn count_trips(&self, endpt: TripEndpoint, now: Duration) -> Option<Vec<String>> {
+    fn count_trips(&self, endpts: BTreeSet<TripEndpoint>, now: Duration) -> Option<Vec<String>> {
         let mut from_aborted = 0;
         let mut from_in_progress = 0;
         let mut from_completed = 0;
@@ -552,7 +553,7 @@ impl TripManager {
 
         let mut any = false;
         for trip in &self.trips {
-            if trip.start == endpt {
+            if endpts.contains(&trip.start) {
                 any = true;
                 if trip.aborted {
                     from_aborted += 1;
@@ -563,7 +564,7 @@ impl TripManager {
                 } else {
                     from_unstarted += 1;
                 }
-            } else if trip.end.as_ref() == Some(&endpt) {
+            } else if trip.end.as_ref().map(|e| endpts.contains(e)).unwrap_or(false) {
                 any = true;
                 if trip.aborted {
                     to_aborted += 1;

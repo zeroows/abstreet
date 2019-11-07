@@ -33,7 +33,7 @@ use abstutil::Cloneable;
 use geom::{Distance, Duration, Pt2D, Speed};
 use map_model::{BuildingID, BusStopID, IntersectionID, LaneID, LaneType, Map, Path, Position};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 // http://pccsc.net/bicycle-parking-info/ says 68 inches, which is 1.73m
@@ -170,7 +170,7 @@ pub struct ParkedCar {
     pub spot: ParkingSpot,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TripEndpoint {
     Building(BuildingID),
     // Might lead from/to to a border intersection, or maybe not if it's just an interactively
@@ -179,6 +179,22 @@ pub enum TripEndpoint {
 }
 
 impl TripEndpoint {
+    pub fn all_starting_from_i(i: IntersectionID, map: &Map) -> BTreeSet<TripEndpoint> {
+        map.get_i(i)
+            .outgoing_lanes
+            .iter()
+            .map(|l| TripEndpoint::Lane(*l))
+            .collect()
+    }
+
+    pub fn all_ending_at_i(i: IntersectionID, map: &Map) -> BTreeSet<TripEndpoint> {
+        map.get_i(i)
+            .incoming_lanes
+            .iter()
+            .map(|l| TripEndpoint::Lane(*l))
+            .collect()
+    }
+
     pub fn end_at_intersection(
         i: IntersectionID,
         lane_types: Vec<LaneType>,
