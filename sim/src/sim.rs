@@ -3,15 +3,15 @@ use crate::{
     DrawPedestrianInput, DrivingSimState, Event, FinishedTrips, GetDrawAgents,
     IntersectionSimState, ParkedCar, ParkingSimState, ParkingSpot, PedestrianID, Router, Scheduler,
     SidewalkPOI, SidewalkSpot, TransitSimState, TripEndpoint, TripID, TripLeg, TripManager,
-    TripPositions, TripResult, TripSpawner, TripSpec, TripStart, TripStatus, UnzoomedAgent,
-    VehicleSpec, VehicleType, WalkingSimState, BUS_LENGTH,
+    TripPositions, TripResult, TripSpawner, TripSpec, TripStatus, UnzoomedAgent, VehicleSpec,
+    VehicleType, WalkingSimState, BUS_LENGTH,
 };
 use abstutil::{elapsed_seconds, Timer};
 use derivative::Derivative;
 use geom::{Distance, Duration, DurationHistogram, PolyLine, Pt2D};
 use map_model::{
     BuildingID, BusRoute, BusRouteID, IntersectionID, LaneID, Map, Path, PathRequest, PathStep,
-    Position, Traversable,
+    Traversable,
 };
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -228,10 +228,10 @@ impl Sim {
 
             // TODO The path analytics (total dist, dist crossed so far) will be wrong for the
             // first round of buses.
-            // Same for this TripStart, though it doesn't matter too much.
+            // Same for this starting TripEndpoint, though it doesn't matter too much.
             let trip = self.trips.new_trip(
                 self.time,
-                TripStart::Appearing(Position::new(path.current_step().as_lane(), Distance::ZERO)),
+                TripEndpoint::Lane(path.current_step().as_lane()),
                 vec![TripLeg::ServeBusRoute(id, route.id)],
             );
 

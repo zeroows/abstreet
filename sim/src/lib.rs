@@ -23,7 +23,7 @@ pub(crate) use self::scheduler::{Command, Scheduler};
 pub use self::sim::{Sim, SimOptions};
 pub(crate) use self::transit::TransitSimState;
 pub use self::trips::TripResult;
-pub use self::trips::{FinishedTrips, TripMode, TripStart, TripStatus};
+pub use self::trips::{FinishedTrips, TripMode, TripStatus};
 pub(crate) use self::trips::{TripLeg, TripManager};
 pub use crate::render::{
     AgentMetadata, CarStatus, DontDrawAgents, DrawCarInput, DrawPedCrowdInput, DrawPedestrianInput,

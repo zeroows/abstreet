@@ -40,7 +40,7 @@ impl TripManager {
     pub fn new_trip(
         &mut self,
         spawned_at: Duration,
-        start: TripStart,
+        start: TripEndpoint,
         legs: Vec<TripLeg>,
     ) -> TripID {
         assert!(!legs.is_empty());
@@ -530,22 +530,17 @@ impl TripManager {
 
     // TODO Refactor after wrangling the TripStart/TripEnd mess
     pub fn count_trips_involving_bldg(&self, b: BuildingID, now: Duration) -> Option<Vec<String>> {
-        self.count_trips(TripStart::Bldg(b), TripEndpoint::Building(b), now)
+        self.count_trips(TripEndpoint::Building(b), now)
     }
     pub fn count_trips_involving_border(
         &self,
-        i: IntersectionID,
+        _: IntersectionID,
         now: Duration,
     ) -> Option<Vec<String>> {
         // TODO temporarily breaking this during refactor
-        self.count_trips(TripStart::Border(i), TripEndpoint::Lane(LaneID(0)), now)
+        self.count_trips(TripEndpoint::Lane(LaneID(0)), now)
     }
-    fn count_trips(
-        &self,
-        start: TripStart,
-        end: TripEndpoint,
-        now: Duration,
-    ) -> Option<Vec<String>> {
+    fn count_trips(&self, endpt: TripEndpoint, now: Duration) -> Option<Vec<String>> {
         let mut from_aborted = 0;
         let mut from_in_progress = 0;
         let mut from_completed = 0;
@@ -557,7 +552,7 @@ impl TripManager {
 
         let mut any = false;
         for trip in &self.trips {
-            if trip.start == start {
+            if trip.start == endpt {
                 any = true;
                 if trip.aborted {
                     from_aborted += 1;
@@ -568,7 +563,7 @@ impl TripManager {
                 } else {
                     from_unstarted += 1;
                 }
-            } else if trip.end.as_ref() == Some(&end) {
+            } else if trip.end.as_ref() == Some(&endpt) {
                 any = true;
                 if trip.aborted {
                     to_aborted += 1;
@@ -614,7 +609,7 @@ struct Trip {
     aborted: bool,
     legs: VecDeque<TripLeg>,
     mode: TripMode,
-    start: TripStart,
+    start: TripEndpoint,
     // Bus trips never end.
     end: Option<TripEndpoint>,
 }
@@ -742,17 +737,8 @@ impl std::fmt::Display for TripMode {
     }
 }
 
-// TODO Argh no, not more of these variants!
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum TripStart {
-    Bldg(BuildingID),
-    Border(IntersectionID),
-    Appearing(Position),
-}
-
 pub struct TripStatus {
-    pub start: TripStart,
+    pub start: TripEndpoint,
     pub end: Option<TripEndpoint>,
 }
 

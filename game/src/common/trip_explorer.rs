@@ -4,7 +4,7 @@ use crate::helpers::ID;
 use crate::ui::UI;
 use ezgui::{EventCtx, GfxCtx, Key, Line, Text, WarpingItemSlider};
 use geom::Pt2D;
-use sim::{TripEndpoint, TripStart};
+use sim::TripEndpoint;
 
 // TODO More info, like each leg of the trip, times, separate driving leg for looking for
 // parking...
@@ -28,22 +28,17 @@ impl TripExplorer {
 
         let steps: Vec<(Pt2D, ID, Text)> = vec![
             match status.start {
-                TripStart::Bldg(b) => (
+                TripEndpoint::Building(b) => (
                     map.get_b(b).front_path.line.pt1(),
                     ID::Building(b),
                     Text::from(Line(format!("start at {}", map.get_b(b).get_name()))),
                 ),
-                TripStart::Border(i) => (
-                    map.get_i(i).polygon.center(),
-                    ID::Intersection(i),
-                    Text::from(Line(format!("enter map via {}", i))),
-                ),
-                TripStart::Appearing(pos) => (
-                    pos.pt(map),
-                    ID::Lane(pos.lane()),
+                TripEndpoint::Lane(l) => (
+                    map.get_l(l).lane_center_pts.first_pt(),
+                    ID::Lane(l),
                     Text::from(Line(format!(
                         "start by appearing at {}",
-                        map.get_parent(pos.lane()).get_name()
+                        map.get_parent(l).get_name()
                     ))),
                 ),
             },
@@ -65,7 +60,10 @@ impl TripExplorer {
                 Some(TripEndpoint::Lane(l)) => (
                     map.get_l(l).lane_center_pts.last_pt(),
                     ID::Lane(l),
-                    Text::from(Line(format!("vanish at the end of {}", l))),
+                    Text::from(Line(format!(
+                        "vanish at the end of {}",
+                        map.get_parent(l).get_name()
+                    ))),
                 ),
                 None => {
                     println!("This car serves a bus route, it never ends");
