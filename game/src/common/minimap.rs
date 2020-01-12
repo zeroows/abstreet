@@ -4,11 +4,11 @@ use crate::render::{AgentColorScheme, MIN_ZOOM_FOR_DETAIL};
 use crate::ui::UI;
 use abstutil::clamp;
 use ezgui::{
-    hotkey, Button, Choice, Color, Composite, DrawBoth, EventCtx, Filler, GeomBatch, GfxCtx,
-    HorizontalAlignment, Key, Line, ManagedWidget, Outcome, RewriteColor, ScreenDims, ScreenPt,
-    Text, VerticalAlignment,
+    hotkey, Button, Canvas, Choice, Color, Composite, DrawBoth, EventCtx, Filler, GeomBatch,
+    GfxCtx, HorizontalAlignment, Key, Line, ManagedWidget, Outcome, RewriteColor, ScreenDims,
+    ScreenPt, Text, VerticalAlignment,
 };
-use geom::{Circle, Distance, Polygon, Pt2D, Ring};
+use geom::{Bounds, Circle, Distance, Polygon, Pt2D, Ring};
 
 // TODO Some of the math in here might assume map bound minimums start at (0, 0).
 pub struct Minimap {
@@ -45,11 +45,22 @@ impl Minimap {
         }
     }
 
-    fn set_zoom(&mut self, ctx: &mut EventCtx, zoom_lvl: usize) {
+    fn set_zoom(&mut self, ctx: &mut EventCtx, ui: &UI, zoom_lvl: usize) {
+        let old_zoom = self.zoom;
+
         let zoom_speed: f64 = 2.0;
         self.zoom_lvl = zoom_lvl;
         self.zoom = self.base_zoom * zoom_speed.powi(self.zoom_lvl as i32);
         self.composite = make_minimap_panel(ctx, &self.acs, self.zoom_lvl);
+
+        // Make the center of the cursor still be in the same spot on the minimap. Same math as
+        // in Canvas.
+        // TODO Very wrong. Canvas math doesn't work, because center_x is such a weird computation.
+        let (_, x1, y1, x2, y2) = self.get_state(ui, ctx.canvas);
+        let center_x = (x1 + x2) / 2.0;
+        let center_y = (y1 + y2) / 2.0;
+        self.offset_x = ((self.zoom / old_zoom) * (center_x + self.offset_x)) - center_x;
+        self.offset_y = ((self.zoom / old_zoom) * (center_y + self.offset_y)) - center_y;
     }
 
     pub fn event(&mut self, ui: &mut UI, ctx: &mut EventCtx) -> Option<Transition> {
@@ -71,29 +82,27 @@ impl Minimap {
                 x if x == "pan down" => self.offset_y += pan_speed * self.zoom,
                 x if x == "pan left" => self.offset_x -= pan_speed * self.zoom,
                 x if x == "pan right" => self.offset_x += pan_speed * self.zoom,
-                // TODO Make the center of the cursor still point to the same thing. Same math as
-                // Canvas.
                 x if x == "zoom in" => {
                     if self.zoom_lvl != 3 {
-                        self.set_zoom(ctx, self.zoom_lvl + 1);
+                        self.set_zoom(ctx, ui, self.zoom_lvl + 1);
                     }
                 }
                 x if x == "zoom out" => {
                     if self.zoom_lvl != 0 {
-                        self.set_zoom(ctx, self.zoom_lvl - 1);
+                        self.set_zoom(ctx, ui, self.zoom_lvl - 1);
                     }
                 }
                 x if x == "zoom to level 1" => {
-                    self.set_zoom(ctx, 0);
+                    self.set_zoom(ctx, ui, 0);
                 }
                 x if x == "zoom to level 2" => {
-                    self.set_zoom(ctx, 1);
+                    self.set_zoom(ctx, ui, 1);
                 }
                 x if x == "zoom to level 3" => {
-                    self.set_zoom(ctx, 2);
+                    self.set_zoom(ctx, ui, 2);
                 }
                 x if x == "zoom to level 4" => {
-                    self.set_zoom(ctx, 3);
+                    self.set_zoom(ctx, ui, 3);
                 }
                 x if x == "change agent colorscheme" => {
                     return Some(Transition::Push(WizardState::new(Box::new(
@@ -155,12 +164,7 @@ impl Minimap {
         None
     }
 
-    pub fn draw(&self, g: &mut GfxCtx, ui: &UI, colorer: Option<&Colorer>) {
-        self.composite.draw(g);
-        if !self.zoomed {
-            return;
-        }
-
+    fn get_state(&self, ui: &UI, canvas: &Canvas) -> (Bounds, f64, f64, f64, f64) {
         let inner_rect = self.composite.filler_rect("minimap");
 
         let mut map_bounds = ui.primary.map.get_bounds().clone();
@@ -169,6 +173,34 @@ impl Minimap {
         map_bounds.min_y = (map_bounds.min_y + self.offset_y) / self.zoom;
         map_bounds.max_x = map_bounds.min_x + inner_rect.width() / self.zoom;
         map_bounds.max_y = map_bounds.min_y + inner_rect.height() / self.zoom;
+
+        // The cursor
+        let (x1, y1) = {
+            let pt = canvas.screen_to_map(ScreenPt::new(0.0, 0.0));
+            (
+                clamp(pt.x(), map_bounds.min_x, map_bounds.max_x),
+                clamp(pt.y(), map_bounds.min_y, map_bounds.max_y),
+            )
+        };
+        let (x2, y2) = {
+            let pt = canvas.screen_to_map(ScreenPt::new(canvas.window_width, canvas.window_height));
+            (
+                clamp(pt.x(), map_bounds.min_x, map_bounds.max_x),
+                clamp(pt.y(), map_bounds.min_y, map_bounds.max_y),
+            )
+        };
+
+        (map_bounds, x1, y1, x2, y2)
+    }
+
+    pub fn draw(&self, g: &mut GfxCtx, ui: &UI, colorer: Option<&Colorer>) {
+        self.composite.draw(g);
+        if !self.zoomed {
+            return;
+        }
+
+        let inner_rect = self.composite.filler_rect("minimap");
+        let (map_bounds, x1, y1, x2, y2) = self.get_state(ui, g.canvas);
 
         g.fork(
             Pt2D::new(map_bounds.min_x, map_bounds.min_y),
@@ -198,23 +230,7 @@ impl Minimap {
             Distance::meters(5.0),
         );
 
-        // The cursor
-        let (x1, y1) = {
-            let pt = g.canvas.screen_to_map(ScreenPt::new(0.0, 0.0));
-            (
-                clamp(pt.x(), map_bounds.min_x, map_bounds.max_x),
-                clamp(pt.y(), map_bounds.min_y, map_bounds.max_y),
-            )
-        };
-        let (x2, y2) = {
-            let pt = g
-                .canvas
-                .screen_to_map(ScreenPt::new(g.canvas.window_width, g.canvas.window_height));
-            (
-                clamp(pt.x(), map_bounds.min_x, map_bounds.max_x),
-                clamp(pt.y(), map_bounds.min_y, map_bounds.max_y),
-            )
-        };
+        // Draw the cursor
         if x1 != x2 && y1 != y2 {
             g.draw_polygon(
                 Color::BLACK,
