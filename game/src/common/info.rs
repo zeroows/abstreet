@@ -86,6 +86,7 @@ impl InfoPanel {
         InfoPanel {
             composite: Composite::new(ManagedWidget::col(col).bg(Color::grey(0.3)))
                 .aligned(HorizontalAlignment::Left, VerticalAlignment::Top)
+                .size_percent(30, 70)
                 .build_scrollable(ctx),
         }
     }

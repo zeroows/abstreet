@@ -9,6 +9,7 @@ use geom::{Distance, Duration, Polygon};
 use std::collections::{HashMap, HashSet};
 use stretch::geometry::{Rect, Size};
 use stretch::node::{Node, Stretch};
+use stretch::number::Number;
 use stretch::style::{AlignItems, Dimension, FlexDirection, FlexWrap, JustifyContent, Style};
 
 type Menu = PopupMenu<Box<dyn Cloneable>>;
@@ -487,15 +488,23 @@ pub struct Composite {
     menus: HashMap<String, Menu>,
     fillers: HashMap<String, Filler>,
 
-    // TODO This doesn't clip. There's no way to express that the scrollable thing should occupy a
-    // small part of the screen.
+    // TODO This needs to clip.
     // TODO Horizontal scrolling?
     scrollable: bool,
+    contents_height: f64,
+    container_height: f64,
 }
 
 pub enum Outcome {
     Clicked(String),
 }
+
+// TODO Need something like this instead of optional percent_width
+/*enum Size {
+    MinimalSize,
+    ExactPercent(f64, f64),
+    MaxPercent(f64, f64),
+}*/
 
 struct Layout {
     horiz: HorizontalAlignment,
@@ -530,18 +539,6 @@ impl Composite {
         let root = stretch
             .new_node(
                 Style {
-                    size: Size {
-                        width: if let Some(pct) = self.layout.percent_width {
-                            Dimension::Points((ctx.canvas.window_width * pct) as f32)
-                        } else {
-                            Dimension::Undefined
-                        },
-                        height: if let Some(pct) = self.layout.percent_height {
-                            Dimension::Points((ctx.canvas.window_height * pct) as f32)
-                        } else {
-                            Dimension::Undefined
-                        },
-                    },
                     ..Default::default()
                 },
                 Vec::new(),
@@ -559,7 +556,19 @@ impl Composite {
         );
         nodes.reverse();
 
-        stretch.compute_layout(root, Size::undefined()).unwrap();
+        let container_size = Size {
+            width: if let Some(pct) = self.layout.percent_width {
+                Number::Defined((ctx.canvas.window_width * pct) as f32)
+            } else {
+                Number::Undefined
+            },
+            height: if let Some(pct) = self.layout.percent_height {
+                Number::Defined((ctx.canvas.window_height * pct) as f32)
+            } else {
+                Number::Undefined
+            },
+        };
+        stretch.compute_layout(root, container_size).unwrap();
         let result = stretch.layout(root).unwrap();
         let top_left = ctx.canvas.align_window(
             ScreenDims::new(result.size.width.into(), result.size.height.into()),
@@ -584,7 +593,7 @@ impl Composite {
     fn scroll_y_offset(&self, ctx: &EventCtx) -> f64 {
         if self.scrollable {
             self.slider("scrollbar").get_percent()
-                * (self.top_level.rect.height() - ctx.canvas.window_height).max(0.0)
+                * (self.contents_height - self.container_height).max(0.0)
         } else {
             0.0
         }
@@ -594,7 +603,7 @@ impl Composite {
         if !self.scrollable {
             return;
         }
-        let max = (self.top_level.rect.height() - ctx.canvas.window_height).max(0.0);
+        let max = (self.contents_height - self.container_height).max(0.0);
         if max == 0.0 {
             assert_eq!(offset, 0.0);
             self.mut_slider("scrollbar").set_percent(ctx, 0.0);
@@ -613,7 +622,7 @@ impl Composite {
         {
             if let Some(scroll) = ctx.input.get_mouse_scroll() {
                 let offset = self.scroll_y_offset(ctx) - scroll * SCROLL_SPEED;
-                let max = (self.top_level.rect.height() - ctx.canvas.window_height).max(0.0);
+                let max = (self.contents_height - self.container_height).max(0.0);
                 // TODO Do the clamping in there instead
                 self.set_scroll_y_offset(ctx, abstutil::clamp(offset, 0.0, max));
             }
@@ -681,7 +690,10 @@ impl CompositeBuilder {
             sliders: self.sliders,
             menus: self.menus,
             fillers: self.fillers,
+
             scrollable: false,
+            contents_height: 0.0,
+            container_height: 0.0,
         };
         c.recompute_layout(ctx);
         ctx.fake_mouseover(|ctx| assert!(c.event(ctx).is_none()));
@@ -694,16 +706,28 @@ impl CompositeBuilder {
             sliders: self.sliders,
             menus: self.menus,
             fillers: self.fillers,
+
             scrollable: false,
+            contents_height: 0.0,
+            container_height: 0.0,
         };
         // If the panel fits without a scrollbar, don't add one.
         c.recompute_layout(ctx);
-        // TODO Max size is a little different...
-        if c.top_level.rect.height() > ctx.canvas.window_height {
+
+        c.contents_height = c.top_level.rect.height();
+        c.container_height = if let Some(pct) = c.layout.percent_height {
+            ctx.canvas.window_height * pct
+        } else if c.contents_height < ctx.canvas.window_height {
+            c.contents_height
+        } else {
+            ctx.canvas.window_height
+        };
+
+        if c.contents_height > c.container_height {
             c.scrollable = true;
             c.sliders.insert(
                 "scrollbar".to_string(),
-                Slider::vertical(ctx, ctx.canvas.window_height),
+                Slider::vertical(ctx, c.container_height),
             );
             c.top_level = ManagedWidget::row(vec![c.top_level, ManagedWidget::slider("scrollbar")]);
             c.recompute_layout(ctx);
