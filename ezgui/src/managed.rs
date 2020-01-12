@@ -493,6 +493,7 @@ pub struct Composite {
     scrollable: bool,
     contents_height: f64,
     container_height: f64,
+    clip_rect: Option<ScreenRectangle>,
 }
 
 pub enum Outcome {
@@ -644,7 +645,13 @@ impl Composite {
 
     pub fn draw(&self, g: &mut GfxCtx) {
         g.canvas.mark_covered_area(self.top_level.rect.clone());
+        if self.scrollable {
+            g.enable_clipping(self.clip_rect.clone().unwrap());
+        }
         self.top_level.draw(g, &self.sliders, &self.menus);
+        if self.scrollable {
+            g.disable_clipping();
+        }
     }
 
     pub fn get_all_click_actions(&self) -> HashSet<String> {
@@ -694,6 +701,7 @@ impl CompositeBuilder {
             scrollable: false,
             contents_height: 0.0,
             container_height: 0.0,
+            clip_rect: None,
         };
         c.recompute_layout(ctx);
         ctx.fake_mouseover(|ctx| assert!(c.event(ctx).is_none()));
@@ -710,6 +718,7 @@ impl CompositeBuilder {
             scrollable: false,
             contents_height: 0.0,
             container_height: 0.0,
+            clip_rect: None,
         };
         // If the panel fits without a scrollbar, don't add one.
         c.recompute_layout(ctx);
@@ -731,6 +740,15 @@ impl CompositeBuilder {
             );
             c.top_level = ManagedWidget::row(vec![c.top_level, ManagedWidget::slider("scrollbar")]);
             c.recompute_layout(ctx);
+
+            let container_width = if let Some(pct) = c.layout.percent_width {
+                ctx.canvas.window_width * pct
+            } else {
+                c.top_level.rect.width()
+            };
+            let dims = ScreenDims::new(container_width, c.container_height);
+            let top_left = ctx.canvas.align_window(dims, c.layout.horiz, c.layout.vert);
+            c.clip_rect = Some(ScreenRectangle::top_left(top_left, dims));
         }
         ctx.fake_mouseover(|ctx| assert!(c.event(ctx).is_none()));
         c
